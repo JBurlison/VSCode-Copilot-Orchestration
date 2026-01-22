@@ -71,6 +71,18 @@ export class PlanBoardProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  public handleMessagePublic(message: any) {
+    this.handleMessage(message);
+  }
+
+  public serializePlanPublic(plan: Plan): any {
+    return this.serializePlan(plan);
+  }
+
+  public getHtmlForWebviewPublic(webview: vscode.Webview): string {
+    return this.getHtmlForWebview(webview);
+  }
+
   private handleUpdateTaskStatus(message: any) {
     const { planId, phaseId, taskId, status } = message;
     this.planManager.updateTaskStatus(planId, phaseId, taskId, status);

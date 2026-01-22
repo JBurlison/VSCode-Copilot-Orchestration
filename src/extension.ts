@@ -59,13 +59,44 @@ export function activate(context: vscode.ExtensionContext) {
                 }
             );
 
-            // Create a new instance for the panel
+            // Manually set up the webview for the panel
+            const planManager = PlanStateManager.getInstance();
+            const currentPlan = planManager.getCurrentPlan();
+
+            panel.webview.options = {
+                enableScripts: true,
+                localResourceRoots: [context.extensionUri]
+            };
+
+            // Create provider instance to get HTML
             const provider = new PlanBoardProvider(context);
-            provider.resolveWebviewView(
-                panel as any,
-                {} as any,
-                {} as any
-            );
+            panel.webview.html = provider.getHtmlForWebviewPublic(panel.webview);
+
+            // Handle messages from webview
+            panel.webview.onDidReceiveMessage(data => {
+                provider.handleMessagePublic(data);
+            });
+
+            // Listen for plan changes
+            const disposable = planManager.onPlanChanged((plan) => {
+                panel.webview.postMessage({
+                    type: 'updatePlan',
+                    plan: plan ? provider.serializePlanPublic(plan) : null
+                });
+            });
+
+            // Clean up on disposal
+            panel.onDidDispose(() => {
+                disposable.dispose();
+            });
+
+            // Send initial plan data
+            if (currentPlan) {
+                panel.webview.postMessage({
+                    type: 'updatePlan',
+                    plan: provider.serializePlanPublic(currentPlan)
+                });
+            }
         }
     );
 

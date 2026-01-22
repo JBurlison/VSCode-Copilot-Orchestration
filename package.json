@@ -48,7 +48,17 @@
       "view/title": [
         {
           "command": "copilot-orchestration.showPlanUI",
+          "when": "view == workbench.panel.chat.view.copilot",
           "group": "navigation"
+        }
+      ]
+    },
+    "views": {
+      "panel": [
+        {
+          "type": "webview",
+          "id": "copilot-orchestration.planBoard",
+          "name": "Plan Board"
         }
       ]
     }
