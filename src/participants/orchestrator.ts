@@ -333,25 +333,40 @@ export class OrchestratorParticipant {
 Your job is to:
 1. Create and manage user stories (similar to Agile user stories) on the plan board
 2. Create and manage tasks within those user stories
-3. Update status of items (not-started, in-progress, blocked, completed)
-4. Coordinate work between agents
-5. Provide status updates and summaries
-6. Handle plan approval and execution
+3. Define dependencies between user stories to form a dependency tree
+4. Update status of items (not-started, in-progress, blocked, completed)
+5. Coordinate work between agents
+6. Provide status updates and summaries
+7. Handle plan approval and execution
 
 CURRENT PLAN STATE:
 ${planContext}
 
 AVAILABLE TOOLS:
-- updateUserStory: Create or update a user story. Requires: userStoryId (unique ID you generate like "story-1"), title, status. Optional: description, storyPoints (1-13), acceptanceCriteria (array), assignedAgent.
+- updateUserStory: Create or update a user story. Requires: userStoryId (unique ID you generate like "story-1"), title, status. Optional: description, storyPoints (1-13), acceptanceCriteria (array), assignedAgent, dependsOn (array of story IDs this story depends on).
 - updateTask: Create or update a task. Requires: taskId (unique ID like "task-1-1"), userStoryId (must match existing story), title, status. Optional: description, priority (low/medium/high/critical), assignedAgent.
 - getPlanStatus: Get current state of all items.
+
+DEPENDENCY TREE:
+- Stories can have dependencies on other stories using the 'dependsOn' field
+- When a story depends on others, it cannot start until ALL dependencies are completed
+- Stories with no dependencies (root stories) will be executed first in parallel
+- After root stories complete, their dependent stories become ready for execution
+- This creates a DAG (directed acyclic graph) of story dependencies - avoid cycles!
+
+Example dependency structure:
+- story-1 (no dependencies) ─┬─→ story-3 (dependsOn: ["story-1", "story-2"]) ─→ story-5 (dependsOn: ["story-3"])
+- story-2 (no dependencies) ─┘
+- story-4 (no dependencies) ───────────────────────────────────────────────────→ story-5 (dependsOn: ["story-3", "story-4"])
 
 IMPORTANT GUIDELINES:
 1. When creating NEW items, generate sequential unique IDs: "story-1", "story-2" for stories, "task-1-1", "task-1-2" for tasks.
 2. ALWAYS use the tools to create/update items - don't just describe what you would do.
-3. For new plans: First create user stories, then add tasks to each story.
+3. For new plans: First create user stories with their dependencies, then add tasks to each story.
 4. Set initial status to "not-started" for new items.
 5. After creating items, briefly confirm what was added.
+6. When creating dependent stories, first create the stories they depend on, then create the dependent story with the dependsOn array.
+7. Only stories with NO incomplete dependencies will be executed in parallel - this controls how many agents run at once.
 
 APPROVAL WORKFLOW:
 - If the user says "approve", "approved", "looks good", "LGTM", "execute", or similar approval phrases, tell them to use the /execute command to start delegating tasks to agents.
@@ -372,6 +387,9 @@ When the user asks to create a plan, add stories, or add tasks - USE THE TOOLS t
       const tasks = this.planManager.getTasks(story.id);
       context += `- [${story.status}] "${story.title}" (ID: ${story.id})`;
       if (story.storyPoints) context += ` - ${story.storyPoints} pts`;
+      if (story.dependsOn && story.dependsOn.length > 0) {
+        context += ` [depends on: ${story.dependsOn.join(", ")}]`;
+      }
       context += "\n";
 
       for (const task of tasks) {
@@ -387,7 +405,7 @@ When the user asks to create a plan, add stories, or add tasks - USE THE TOOLS t
       {
         name: "updateUserStory",
         description:
-          "Create or update a user story on the plan board. Use this to add new user stories or modify existing ones.",
+          "Create or update a user story on the plan board. Use this to add new user stories or modify existing ones. Stories can have dependencies on other stories.",
         inputSchema: {
           type: "object",
           properties: {
@@ -413,6 +431,12 @@ When the user asks to create a plan, add stories, or add tasks - USE THE TOOLS t
               description: "Acceptance criteria list",
             },
             assignedAgent: { type: "string", description: "Assigned agent" },
+            dependsOn: {
+              type: "array",
+              items: { type: "string" },
+              description:
+                'Array of user story IDs that must complete before this story can start. Use this to define the dependency tree (e.g., ["story-1", "story-2"] means this story depends on story-1 AND story-2 completing first).',
+            },
           },
           required: ["userStoryId", "title", "status"],
         },
@@ -934,63 +958,129 @@ When the user asks to create a plan, add stories, or add tasks - USE THE TOOLS t
       return { metadata: { command: "execute" } };
     }
 
-    // Get all tasks across all user stories
-    const allTasks: Array<{ task: any; story: any }> = [];
-    for (const story of userStories) {
-      const tasks = this.planManager.getTasks(story.id);
-      for (const task of tasks) {
-        if (task.status === "not-started") {
-          allTasks.push({ task, story });
-        }
+    // Validate dependency graph
+    const validation = this.planManager.validateDependencies();
+    if (!validation.valid) {
+      stream.markdown(
+        "⚠️ **Dependency cycle detected!** Cannot execute plan.\n\n",
+      );
+      stream.markdown("The following stories form a cycle:\n");
+      for (const cycle of validation.cycles || []) {
+        stream.markdown(`- ${cycle.join(" → ")}\n`);
       }
-    }
-
-    if (allTasks.length === 0) {
-      stream.markdown("✅ All tasks are already in progress or completed.\n");
+      stream.markdown("\nPlease fix the dependencies before executing.\n");
       return { metadata: { command: "execute" } };
     }
 
-    stream.markdown(`Found **${allTasks.length} tasks** to delegate.\n\n`);
-    stream.markdown("### Launching Agent Workflows\n\n");
+    // Get stories that are ready to execute (dependencies satisfied)
+    const readyStories = this.planManager.getReadyStories();
+    const blockedStories = this.planManager.getBlockedByDependencies();
+    const inProgressStories = userStories.filter(
+      (s) => s.status === "in-progress",
+    );
 
-    // Process each task and launch chat windows
-    for (const { task, story } of allTasks) {
-      const agent = task.assignedAgent || "orchestrator";
+    // Show dependency tree overview
+    stream.markdown("### 📊 Dependency Analysis\n\n");
+    stream.markdown(
+      `- **${readyStories.length}** stories ready to start (no blocking dependencies)\n`,
+    );
+    stream.markdown(`- **${inProgressStories.length}** stories in progress\n`);
+    stream.markdown(
+      `- **${blockedStories.length}** stories waiting on dependencies\n\n`,
+    );
 
-      // Update task status to in-progress
-      await this.planManager.updateTask(task.id, { status: "in-progress" });
+    if (blockedStories.length > 0) {
+      stream.markdown("**Blocked stories:**\n");
+      for (const story of blockedStories) {
+        const deps = story.dependsOn
+          ?.map((depId) => {
+            const dep = this.planManager.getUserStory(depId);
+            return dep ? `${dep.title} (${dep.status})` : depId;
+          })
+          .join(", ");
+        stream.markdown(`- 🔒 ${story.title} → waiting on: ${deps}\n`);
+      }
+      stream.markdown("\n");
+    }
 
-      // Build the task prompt
-      const taskPrompt = this.buildTaskPrompt(task, story);
+    if (readyStories.length === 0) {
+      if (inProgressStories.length > 0) {
+        stream.markdown(
+          "✅ All available stories are already in progress. Waiting for completions to unblock more.\n",
+        );
+      } else {
+        stream.markdown("✅ All stories are completed or blocked.\n");
+      }
+      return { metadata: { command: "execute" } };
+    }
 
-      stream.markdown(`#### 🔧 ${task.title}\n`);
-      stream.markdown(`*User Story: ${story.title}*\n`);
-      stream.markdown(`*Assigned to: @${agent}*\n\n`);
+    stream.markdown(
+      `### 🚀 Launching **${readyStories.length}** parallel agent(s)\n\n`,
+    );
+
+    // Process each READY story and launch chat windows
+    let launchedCount = 0;
+    for (const story of readyStories) {
+      const agent = story.assignedAgent || "orchestrator";
+
+      // Update story status to in-progress
+      await this.planManager.updateUserStory(story.id, {
+        status: "in-progress",
+      });
+
+      // Get tasks for this story
+      const tasks = this.planManager.getTasks(story.id);
+
+      // Build the story prompt
+      const storyPrompt = this.buildStoryPrompt(story, tasks);
+
+      stream.markdown(`#### 📖 ${story.title}\n`);
+      if (story.storyPoints) {
+        stream.markdown(`*${story.storyPoints} story points*\n`);
+      }
+      stream.markdown(`*Assigned to: @${agent}*\n`);
+      if (tasks.length > 0) {
+        stream.markdown(`*Tasks: ${tasks.length}*\n`);
+      }
+      stream.markdown("\n");
 
       // Send message to the agent via message bus
       await this.messageBus.sendMessage(
         "orchestrator",
         agent,
         "handoff",
-        taskPrompt,
+        storyPrompt,
         {
-          taskId: task.id,
           userStoryId: story.id,
-          taskTitle: task.title,
           storyTitle: story.title,
-          priority: task.priority,
+          taskCount: tasks.length,
+          storyPoints: story.storyPoints,
         },
       );
 
-      // Launch a chat window for the agent
+      // Launch a NEW chat window for the agent
       try {
-        await vscode.commands.executeCommand("workbench.action.chat.open", {
-          query: `@${agent} ${taskPrompt}`,
-        });
-        stream.markdown(`✅ Chat launched for @${agent}\n\n`);
+        // First, create a new chat session
+        await vscode.commands.executeCommand("workbench.action.chat.newChat");
 
-        // Small delay to prevent overwhelming the UI
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        // Small delay to ensure the new chat is ready
+        await new Promise((resolve) => setTimeout(resolve, 300));
+
+        // Then open it with the query for this specific story
+        await vscode.commands.executeCommand("workbench.action.chat.open", {
+          query: `@${agent} ${storyPrompt}`,
+        });
+
+        // Submit the query automatically
+        await vscode.commands.executeCommand(
+          "workbench.action.chat.acceptInput",
+        );
+
+        stream.markdown(`✅ Chat launched for @${agent}\n\n`);
+        launchedCount++;
+
+        // Delay to prevent overwhelming the UI and allow each chat to initialize
+        await new Promise((resolve) => setTimeout(resolve, 1000));
       } catch (error) {
         stream.markdown(
           `⚠️ Could not launch chat: ${error instanceof Error ? error.message : "Unknown error"}\n\n`,
@@ -1000,9 +1090,20 @@ When the user asks to create a plan, add stories, or add tasks - USE THE TOOLS t
 
     stream.markdown("---\n\n");
     stream.markdown("### 📊 Execution Summary\n\n");
-    stream.markdown(`- **${allTasks.length}** tasks delegated to agents\n`);
-    stream.markdown(`- All tasks marked as **in-progress**\n`);
-    stream.markdown(`- Chat windows opened for each agent\n\n`);
+    stream.markdown(
+      `- **${launchedCount}** agent(s) launched for ready stories\n`,
+    );
+    stream.markdown(
+      `- **${blockedStories.length}** stories waiting on dependencies\n`,
+    );
+    stream.markdown(`- Stories marked as **in-progress**\n\n`);
+
+    if (blockedStories.length > 0) {
+      stream.markdown(
+        "💡 **Tip:** Run `/execute` again after stories complete to launch dependent stories.\n\n",
+      );
+    }
+
     stream.markdown("Use `/status` to monitor progress.\n");
 
     stream.button({
@@ -1011,6 +1112,44 @@ When the user asks to create a plan, add stories, or add tasks - USE THE TOOLS t
     });
 
     return { metadata: { command: "execute" } };
+  }
+
+  private buildStoryPrompt(story: any, tasks: any[]): string {
+    let prompt = `## User Story Assignment\n\n`;
+    prompt += `**Story:** ${story.title}\n`;
+
+    if (story.description) {
+      prompt += `**Description:** ${story.description}\n`;
+    }
+
+    if (story.storyPoints) {
+      prompt += `**Story Points:** ${story.storyPoints}\n`;
+    }
+
+    if (story.acceptanceCriteria && story.acceptanceCriteria.length > 0) {
+      prompt += `\n**Acceptance Criteria:**\n`;
+      for (const criteria of story.acceptanceCriteria) {
+        prompt += `- ${criteria}\n`;
+      }
+    }
+
+    if (tasks.length > 0) {
+      prompt += `\n**Tasks to complete:**\n`;
+      for (const task of tasks) {
+        prompt += `- ${task.title}`;
+        if (task.priority) {
+          prompt += ` [${task.priority}]`;
+        }
+        if (task.description) {
+          prompt += `: ${task.description}`;
+        }
+        prompt += `\n`;
+      }
+    }
+
+    prompt += `\n**Instructions:** Please complete this user story and all its tasks. Work through each task systematically. When done, report back with your results.`;
+
+    return prompt;
   }
 
   private buildTaskPrompt(task: any, story: any): string {

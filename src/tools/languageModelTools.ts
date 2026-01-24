@@ -191,6 +191,7 @@ class UpdateUserStoryTool implements vscode.LanguageModelTool<UpdateUserStoryInp
       assignedAgent,
       storyPoints,
       acceptanceCriteria,
+      dependsOn,
     } = options.input;
 
     try {
@@ -206,6 +207,7 @@ class UpdateUserStoryTool implements vscode.LanguageModelTool<UpdateUserStoryInp
           assignedAgent,
           storyPoints,
           acceptanceCriteria,
+          dependsOn,
         });
       } else {
         userStory = await this.planManager.createUserStory({
@@ -216,6 +218,7 @@ class UpdateUserStoryTool implements vscode.LanguageModelTool<UpdateUserStoryInp
           assignedAgent,
           storyPoints,
           acceptanceCriteria,
+          dependsOn,
         });
       }
 

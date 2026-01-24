@@ -6,51 +6,57 @@
 // Status Types
 // ============================================================================
 
-export type TaskStatus = 'not-started' | 'in-progress' | 'blocked' | 'completed';
-export type Priority = 'low' | 'medium' | 'high' | 'critical';
-export type MessageType = 'request' | 'response' | 'notification' | 'handoff';
+export type TaskStatus =
+  | "not-started"
+  | "in-progress"
+  | "blocked"
+  | "completed";
+export type Priority = "low" | "medium" | "high" | "critical";
+export type MessageType = "request" | "response" | "notification" | "handoff";
 
 // ============================================================================
 // Plan Types
 // ============================================================================
 
 export interface Task {
-    id: string;
-    userStoryId: string;
-    title: string;
-    description?: string;
-    status: TaskStatus;
-    assignedAgent?: string;
-    priority?: Priority;
-    createdAt: number;
-    updatedAt: number;
-    completedAt?: number;
-    metadata?: Record<string, unknown>;
+  id: string;
+  userStoryId: string;
+  title: string;
+  description?: string;
+  status: TaskStatus;
+  assignedAgent?: string;
+  priority?: Priority;
+  createdAt: number;
+  updatedAt: number;
+  completedAt?: number;
+  metadata?: Record<string, unknown>;
 }
 
 export interface UserStory {
-    id: string;
-    title: string;
-    description?: string;
-    status: TaskStatus;
-    assignedAgent?: string;
-    order: number;
-    createdAt: number;
-    updatedAt: number;
-    completedAt?: number;
-    acceptanceCriteria?: string[];
-    storyPoints?: number;
-    metadata?: Record<string, unknown>;
+  id: string;
+  title: string;
+  description?: string;
+  status: TaskStatus;
+  assignedAgent?: string;
+  order: number;
+  createdAt: number;
+  updatedAt: number;
+  completedAt?: number;
+  acceptanceCriteria?: string[];
+  storyPoints?: number;
+  /** IDs of user stories this story depends on (must complete before this can start) */
+  dependsOn?: string[];
+  metadata?: Record<string, unknown>;
 }
 
 export interface Plan {
-    id: string;
-    name: string;
-    description?: string;
-    userStories: UserStory[];
-    tasks: Task[];
-    createdAt: number;
-    updatedAt: number;
+  id: string;
+  name: string;
+  description?: string;
+  userStories: UserStory[];
+  tasks: Task[];
+  createdAt: number;
+  updatedAt: number;
 }
 
 // ============================================================================
@@ -58,29 +64,29 @@ export interface Plan {
 // ============================================================================
 
 export interface AgentMessage {
-    id: string;
-    sourceAgent: string;
-    targetAgent: string;
-    messageType: MessageType;
-    content: string;
-    metadata?: Record<string, unknown>;
-    timestamp: number;
-    processed: boolean;
-    response?: string;
+  id: string;
+  sourceAgent: string;
+  targetAgent: string;
+  messageType: MessageType;
+  content: string;
+  metadata?: Record<string, unknown>;
+  timestamp: number;
+  processed: boolean;
+  response?: string;
 }
 
 export interface AgentInfo {
-    id: string;
-    name: string;
-    fullName: string;
-    description: string;
-    isActive: boolean;
-    lastActiveAt?: number;
+  id: string;
+  name: string;
+  fullName: string;
+  description: string;
+  isActive: boolean;
+  lastActiveAt?: number;
 }
 
 export interface AgentQueue {
-    agentId: string;
-    messages: AgentMessage[];
+  agentId: string;
+  messages: AgentMessage[];
 }
 
 // ============================================================================
@@ -88,82 +94,84 @@ export interface AgentQueue {
 // ============================================================================
 
 export interface LaunchChatInput {
-    agentId: string;
-    prompt: string;
-    model?: string;
+  agentId: string;
+  prompt: string;
+  model?: string;
 }
 
 export interface SendAgentMessageInput {
-    targetAgent: string;
-    messageType: MessageType;
-    content: string;
-    metadata?: Record<string, unknown>;
+  targetAgent: string;
+  messageType: MessageType;
+  content: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface UpdateUserStoryInput {
-    userStoryId: string;
-    title: string;
-    status: TaskStatus;
-    description?: string;
-    assignedAgent?: string;
-    acceptanceCriteria?: string[];
-    storyPoints?: number;
+  userStoryId: string;
+  title: string;
+  status: TaskStatus;
+  description?: string;
+  assignedAgent?: string;
+  acceptanceCriteria?: string[];
+  storyPoints?: number;
+  /** IDs of user stories this story depends on */
+  dependsOn?: string[];
 }
 
 export interface UpdateTaskInput {
-    taskId: string;
-    userStoryId: string;
-    title: string;
-    status: TaskStatus;
-    description?: string;
-    assignedAgent?: string;
-    priority?: Priority;
+  taskId: string;
+  userStoryId: string;
+  title: string;
+  status: TaskStatus;
+  description?: string;
+  assignedAgent?: string;
+  priority?: Priority;
 }
 
 export interface GetPlanStatusInput {
-    includeCompleted?: boolean;
-    filterByAgent?: string;
+  includeCompleted?: boolean;
+  filterByAgent?: string;
 }
 
 export interface GetAgentQueueInput {
-    agentId: string;
-    messageType?: MessageType | 'all';
+  agentId: string;
+  messageType?: MessageType | "all";
 }
 
 // ============================================================================
 // Webview Message Types
 // ============================================================================
 
-export type WebviewMessageType = 
-    | 'planUpdated'
-    | 'userStoryUpdated'
-    | 'taskUpdated'
-    | 'requestPlan'
-    | 'updateUserStory'
-    | 'updateTask'
-    | 'deleteUserStory'
-    | 'deleteTask'
-    | 'reorderUserStories'
-    | 'moveTask';
+export type WebviewMessageType =
+  | "planUpdated"
+  | "userStoryUpdated"
+  | "taskUpdated"
+  | "requestPlan"
+  | "updateUserStory"
+  | "updateTask"
+  | "deleteUserStory"
+  | "deleteTask"
+  | "reorderUserStories"
+  | "moveTask";
 
 export interface WebviewMessage {
-    type: WebviewMessageType;
-    payload?: unknown;
+  type: WebviewMessageType;
+  payload?: unknown;
 }
 
 export interface PlanUpdatedMessage extends WebviewMessage {
-    type: 'planUpdated';
-    payload: Plan;
+  type: "planUpdated";
+  payload: Plan;
 }
 
 export interface UserStoryUpdatedMessage extends WebviewMessage {
-    type: 'userStoryUpdated';
-    payload: UserStory;
+  type: "userStoryUpdated";
+  payload: UserStory;
 }
 
 export interface TaskUpdatedMessage extends WebviewMessage {
-    type: 'taskUpdated';
-    payload: Task;
+  type: "taskUpdated";
+  payload: Task;
 }
 
 // ============================================================================
@@ -171,12 +179,12 @@ export interface TaskUpdatedMessage extends WebviewMessage {
 // ============================================================================
 
 export interface PlanChangeEvent {
-    plan: Plan;
-    changeType: 'userStory' | 'task' | 'full';
-    changedItem?: UserStory | Task;
+  plan: Plan;
+  changeType: "userStory" | "task" | "full";
+  changedItem?: UserStory | Task;
 }
 
 export interface AgentMessageEvent {
-    message: AgentMessage;
-    direction: 'incoming' | 'outgoing';
+  message: AgentMessage;
+  direction: "incoming" | "outgoing";
 }
