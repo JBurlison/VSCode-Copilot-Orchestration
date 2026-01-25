@@ -1,24 +1,74 @@
 {
-    "version": "2.0.0",
-    "tasks": [
-        {
-            "type": "npm",
-            "script": "watch",
-            "problemMatcher": "$tsc-watch",
-            "isBackground": true,
-            "presentation": {
-                "reveal": "never"
-            },
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            }
-        },
-        {
-            "type": "npm",
-            "script": "compile",
-            "problemMatcher": "$tsc",
-            "group": "build"
-        }
-    ]
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "type": "npm",
+      "script": "watch",
+      "problemMatcher": "$tsc-watch",
+      "isBackground": true,
+      "presentation": {
+        "reveal": "never"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "type": "npm",
+      "script": "compile",
+      "problemMatcher": "$tsc",
+      "group": "build"
+    },
+    {
+      "label": "package",
+      "type": "shell",
+      "command": "vsce package --allow-missing-repository",
+      "dependsOn": ["npm: compile"],
+      "dependsOrder": "sequence",
+      "group": "build"
+    },
+    {
+      "label": "version:patch",
+      "type": "shell",
+      "command": "npm version patch --no-git-tag-version",
+      "group": "build"
+    },
+    {
+      "label": "version:minor",
+      "type": "shell",
+      "command": "npm version minor --no-git-tag-version",
+      "group": "build"
+    },
+    {
+      "label": "version:major",
+      "type": "shell",
+      "command": "npm version major --no-git-tag-version",
+      "group": "build"
+    },
+    {
+      "label": "package:patch",
+      "type": "shell",
+      "command": "vsce package --allow-missing-repository",
+      "dependsOn": ["version:patch", "npm: compile"],
+      "dependsOrder": "sequence",
+      "group": "build"
+    },
+    {
+      "label": "package:minor",
+      "type": "shell",
+      "command": "vsce package --allow-missing-repository",
+      "dependsOn": ["version:minor", "npm: compile"],
+      "dependsOrder": "sequence",
+      "group": "build"
+    },
+    {
+      "label": "package:major",
+      "type": "shell",
+      "command": "vsce package --allow-missing-repository",
+      "dependsOn": ["version:major", "npm: compile"],
+      "dependsOrder": "sequence",
+      "group": "build"
+    }
+  ]
 }

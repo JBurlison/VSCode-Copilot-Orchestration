@@ -2,7 +2,7 @@
   "name": "copilot-orchestration",
   "displayName": "Copilot Orchestration",
   "description": "Extends Copilot Chat UI with agent orchestration, communication, and plan management",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "publisher": "jburlison",
   "repository": "https://github.com/jburlison/VSCode-Copilot-Orchestration",
   "engines": {
